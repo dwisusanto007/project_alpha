@@ -27,9 +27,9 @@ steps:
       - build
       - --platform=linux/amd64
       - -t
-      - asia-southeast1-docker.pkg.dev/$PROJECT_ID/project-alpha/app:$COMMIT_SHA
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/project-alpha/app:$COMMIT_SHA
       - -t
-      - asia-southeast1-docker.pkg.dev/$PROJECT_ID/project-alpha/app:latest
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/project-alpha/app:latest
       - .
 
   # Step 5 — Push image
@@ -37,19 +37,19 @@ steps:
     args:
       - push
       - --all-tags
-      - asia-southeast1-docker.pkg.dev/$PROJECT_ID/project-alpha/app
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/project-alpha/app
 
-  # Step 6 — Deploy to Cloud Run (staging)
+  # Step 6 — Deploy to Cloud Run staging
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - project-alpha
-      - --image=asia-southeast1-docker.pkg.dev/$PROJECT_ID/project-alpha/app:$COMMIT_SHA
-      - --region=asia-southeast1
+      - project-alpha-staging
+      - --image=europe-west1-docker.pkg.dev/$PROJECT_ID/project-alpha/app:$COMMIT_SHA
+      - --region=europe-west1
       - --platform=managed
-      - --no-allow-unauthenticated
+      - --allow-unauthenticated
 
 availableSecrets:
   secretManager:
