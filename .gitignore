@@ -1,0 +1,7 @@
+.env
+.claude/*
+node_modules/*
+client/node_modules/*
+client/dist/*
+app/node_modules/*
+app/dist/*
