@@ -3,6 +3,7 @@ const ctrl = require('./invoice.controller')
 
 router.post('/from-project/:projectId', ctrl.createFromProject)
 router.get('/', ctrl.listInvoices)
+router.get('/:id/pdf', ctrl.getInvoicePdf)
 router.get('/:id', ctrl.getInvoice)
 router.patch('/:id/status', ctrl.patchStatus)
 router.post('/:id/send', ctrl.sendInvoice)

@@ -50,6 +50,15 @@ router.get('/auth/verify', async (req, res, next) => {
   }
 })
 
+router.get('/auth/me', portalAuth, (req, res) => {
+  res.json({ data: { clientId: req.client.clientId, email: req.client.email } })
+})
+
+router.post('/auth/logout', (req, res) => {
+  res.clearCookie('portal_token', { httpOnly: true, sameSite: 'lax' })
+  res.json({ message: 'Logged out' })
+})
+
 router.get('/projects', portalAuth, ctrl.listProjects)
 router.get('/projects/:id', portalAuth, ctrl.getProject)
 router.post('/projects/:id/approve', portalAuth, ctrl.approveProject)

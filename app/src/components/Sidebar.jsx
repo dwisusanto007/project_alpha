@@ -1,5 +1,5 @@
 import React from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 
 const links = [
   { to: '/clients', label: 'Clients' },
@@ -9,13 +9,20 @@ const links = [
 ]
 
 export default function Sidebar() {
+  const navigate = useNavigate()
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    navigate('/login', { replace: true })
+  }
+
   return (
-    <aside style={{ width: '200px', background: '#1e293b', minHeight: '100vh', padding: '24px 0', flexShrink: 0 }}>
+    <aside style={{ width: '200px', background: '#1e293b', minHeight: '100vh', padding: '24px 0', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '0 20px 24px', borderBottom: '1px solid #334155' }}>
         <h1 style={{ color: '#f8fafc', fontSize: '16px', fontWeight: 700 }}>Project Alpha</h1>
         <p style={{ color: '#64748b', fontSize: '12px', marginTop: '2px' }}>Developer Dashboard</p>
       </div>
-      <nav style={{ padding: '16px 0' }}>
+      <nav style={{ padding: '16px 0', flex: 1 }}>
         {links.map(link => (
           <NavLink key={link.to} to={link.to} style={({ isActive }) => ({
             display: 'block',
@@ -30,6 +37,11 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      <div style={{ padding: '16px 20px', borderTop: '1px solid #334155' }}>
+        <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0 }}>
+          Sign out
+        </button>
+      </div>
     </aside>
   )
 }

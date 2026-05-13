@@ -1,5 +1,6 @@
 const service = require('./invoice.service')
 const { sendInvoiceEmail } = require('../emails/mailer')
+const { renderInvoicePdf } = require('./invoice.pdf')
 
 async function createFromProject(req, res, next) {
   try {
@@ -51,4 +52,20 @@ async function sendInvoice(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { createFromProject, listInvoices, getInvoice, patchStatus, sendInvoice }
+async function getInvoicePdf(req, res, next) {
+  try {
+    const invoice = await service.findById(req.params.id)
+    if (!invoice) return res.status(404).json({ error: true, message: 'Not found', statusCode: 404 })
+
+    const pdf = await renderInvoicePdf(invoice)
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${invoice.invoice_number}.pdf"`,
+      'Content-Length': pdf.length,
+    })
+    res.send(pdf)
+  } catch (err) { next(err) }
+}
+
+module.exports = { createFromProject, listInvoices, getInvoice, patchStatus, sendInvoice, getInvoicePdf }

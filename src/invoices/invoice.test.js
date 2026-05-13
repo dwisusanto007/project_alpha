@@ -1,3 +1,8 @@
+// Mock Puppeteer-based PDF renderer so tests run without Chrome
+jest.mock('./invoice.pdf', () => ({
+  renderInvoicePdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-mock'))
+}))
+
 const request = require('supertest')
 const app = require('../app')
 const knex = require('../db/knex')
@@ -111,5 +116,31 @@ describe('POST /api/invoices/:id/send', () => {
     expect(res.status).toBe(200)
     expect(res.body.data.status).toBe('sent')
     expect(res.body.data.sent_at).not.toBeNull()
+  })
+})
+
+describe('GET /api/invoices/:id/pdf', () => {
+  it('returns PDF with correct content-type and filename', async () => {
+    const { body: { data: created } } = await request(app)
+      .post(`/api/invoices/from-project/${testProject.id}`)
+
+    const res = await request(app)
+      .get(`/api/invoices/${created.id}/pdf`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks = []
+        res.on('data', chunk => chunks.push(chunk))
+        res.on('end', () => callback(null, Buffer.concat(chunks)))
+      })
+
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/application\/pdf/)
+    expect(res.headers['content-disposition']).toMatch(/INV-.*\.pdf/)
+  })
+
+  it('returns 404 for non-existent invoice', async () => {
+    const res = await request(app)
+      .get('/api/invoices/00000000-0000-0000-0000-000000000000/pdf')
+    expect(res.status).toBe(404)
   })
 })

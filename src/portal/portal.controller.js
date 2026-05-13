@@ -34,9 +34,15 @@ async function getProject(req, res, next) {
     }
     const tasks = await knex('tasks')
       .where({ project_id: project.id })
-      .select('id', 'title', 'status', 'priority', 'due_date')
+      .select('id', 'title', 'status', 'priority', 'due_date', 'price')
       .orderBy('created_at', 'asc')
-    res.json({ data: { ...project, tasks } })
+
+    const total_value = tasks.reduce((sum, t) => sum + parseFloat(t.price || 0), 0)
+    const completed_value = tasks
+      .filter(t => t.status === 'done')
+      .reduce((sum, t) => sum + parseFloat(t.price || 0), 0)
+
+    res.json({ data: { ...project, tasks, total_value, completed_value } })
   } catch (err) {
     next(err)
   }

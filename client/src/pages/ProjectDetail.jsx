@@ -39,6 +39,9 @@ export default function ProjectDetail() {
   const tasks = project.tasks || []
   const done = tasks.filter(t => t.status === 'done').length
   const percent = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0
+  const totalValue = parseFloat(project.total_value || 0)
+  const completedValue = parseFloat(project.completed_value || 0)
+  const fmt = (n) => n > 0 ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : null
 
   return (
     <div>
@@ -61,7 +64,15 @@ export default function ProjectDetail() {
       <div style={{ background: '#e5e7eb', borderRadius: '4px', height: '8px', margin: '16px 0 4px', overflow: 'hidden' }}>
         <div style={{ width: `${percent}%`, background: '#2563eb', height: '100%' }} />
       </div>
-      <p style={{ color: '#666', fontSize: '13px', marginBottom: '24px' }}>{done}/{tasks.length} tasks done</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <p style={{ color: '#666', fontSize: '13px', margin: 0 }}>{done}/{tasks.length} tasks done</p>
+        {totalValue > 0 && (
+          <p style={{ fontSize: '13px', margin: 0, color: '#374151' }}>
+            <span style={{ color: '#16a34a', fontWeight: 600 }}>{fmt(completedValue)}</span>
+            <span style={{ color: '#9ca3af' }}> / {fmt(totalValue)}</span>
+          </p>
+        )}
+      </div>
       <h2 style={{ fontSize: '18px', marginBottom: '12px' }}>Tasks</h2>
       {tasks.length === 0 && <p style={{ color: '#666' }}>No tasks yet.</p>}
       {tasks.map(t => (
@@ -70,7 +81,12 @@ export default function ProjectDetail() {
             <p style={{ fontWeight: t.status === 'done' ? 400 : 500, textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? '#9ca3af' : '#1a1a1a', marginBottom: t.due_date ? '4px' : 0 }}>{t.title}</p>
             {t.due_date && <p style={{ color: '#9ca3af', fontSize: '12px' }}>Due {t.due_date}</p>}
           </div>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+            {fmt(parseFloat(t.price || 0)) && (
+              <span style={{ fontSize: '13px', fontWeight: 500, color: t.status === 'done' ? '#16a34a' : '#374151' }}>
+                {fmt(parseFloat(t.price || 0))}
+              </span>
+            )}
             <span style={{ fontSize: '12px', color: priorityColor[t.priority] || '#6b7280' }}>{t.priority}</span>
             <span style={{ fontSize: '12px', background: statusColor[t.status] || '#6b7280', color: '#fff', borderRadius: '4px', padding: '2px 6px' }}>{t.status}</span>
           </div>

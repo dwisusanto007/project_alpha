@@ -123,6 +123,64 @@ describe('GET /portal/projects', () => {
   })
 })
 
+describe('GET /portal/projects/:id', () => {
+  it('returns project with tasks including price, total_value, completed_value', async () => {
+    const [project] = await knex('projects')
+      .insert({ client_id: testClient.id, name: 'Pricing Project' })
+      .returning('*')
+    await knex('tasks').insert([
+      { project_id: project.id, title: 'Design', status: 'done', price: 300 },
+      { project_id: project.id, title: 'Frontend', status: 'done', price: 500 },
+      { project_id: project.id, title: 'Testing', status: 'todo', price: 200 }
+    ])
+    const res = await request(app)
+      .get(`/portal/projects/${project.id}`)
+      .set('Cookie', makePortalCookie(testClient.id, testClient.email))
+    expect(res.status).toBe(200)
+    expect(res.body.data.tasks).toHaveLength(3)
+    expect(res.body.data.tasks[0]).toHaveProperty('price')
+    expect(parseFloat(res.body.data.total_value)).toBe(1000)
+    expect(parseFloat(res.body.data.completed_value)).toBe(800)
+  })
+
+  it('returns 404 for project belonging to another client', async () => {
+    const [other] = await knex('clients')
+      .insert({ name: 'Other', email: 'other@test.com' })
+      .returning('*')
+    const [project] = await knex('projects')
+      .insert({ client_id: other.id, name: 'Not Mine' })
+      .returning('*')
+    const res = await request(app)
+      .get(`/portal/projects/${project.id}`)
+      .set('Cookie', makePortalCookie(testClient.id, testClient.email))
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('GET /portal/auth/me', () => {
+  it('returns client info with valid cookie', async () => {
+    const res = await request(app)
+      .get('/portal/auth/me')
+      .set('Cookie', makePortalCookie(testClient.id, testClient.email))
+    expect(res.status).toBe(200)
+    expect(res.body.data.email).toBe('portal@test.com')
+    expect(res.body.data.clientId).toBe(testClient.id)
+  })
+
+  it('returns 401 without cookie', async () => {
+    const res = await request(app).get('/portal/auth/me')
+    expect(res.status).toBe(401)
+  })
+})
+
+describe('POST /portal/auth/logout', () => {
+  it('clears portal_token cookie', async () => {
+    const res = await request(app).post('/portal/auth/logout')
+    expect(res.status).toBe(200)
+    expect(res.headers['set-cookie'][0]).toMatch(/portal_token=;/)
+  })
+})
+
 describe('POST /portal/projects/:id/approve', () => {
   it('approves a project and returns updated data', async () => {
     const [project] = await knex('projects')
