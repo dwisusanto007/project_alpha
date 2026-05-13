@@ -31,7 +31,7 @@ export default function ProjectSummary() {
           <p style={{ color: '#64748b', fontSize: '13px', marginTop: '6px' }}>Completed Tasks</p>
         </div>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px 24px', flex: 1, textAlign: 'center' }}>
-          <p style={{ fontSize: '32px', fontWeight: 700, color: '#2563eb' }}>${summary.total_value.toLocaleString()}</p>
+          <p style={{ fontSize: '32px', fontWeight: 700, color: '#2563eb' }}>Rp {parseFloat(summary.total_value || 0).toLocaleString('id-ID')}</p>
           <p style={{ color: '#64748b', fontSize: '13px', marginTop: '6px' }}>Total Value</p>
         </div>
       </div>
@@ -42,7 +42,7 @@ export default function ProjectSummary() {
         <div key={t.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px 20px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <p style={{ fontWeight: 500 }}>{t.title}</p>
           <p style={{ color: '#16a34a', fontWeight: 600, fontSize: '15px' }}>
-            {parseFloat(t.price) > 0 ? `$${parseFloat(t.price).toLocaleString()}` : '—'}
+            {parseFloat(t.price) > 0 ? `Rp ${parseFloat(t.price).toLocaleString('id-ID')}` : '—'}
           </p>
         </div>
       ))}

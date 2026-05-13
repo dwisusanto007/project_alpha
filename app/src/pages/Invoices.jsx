@@ -177,7 +177,15 @@ export default function Invoices() {
               </tfoot>
             </table>
 
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <a
+                href={`/api/invoices/${detail.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ ...btn('#475569'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+              >
+                ↓ PDF
+              </a>
               {detail.status === 'draft' && (
                 <button style={btn('#0ea5e9')} onClick={() => sendInvoice(detail.id)}>Send to Client</button>
               )}
