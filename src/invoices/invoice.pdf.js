@@ -1,315 +1,133 @@
-const puppeteer = require('puppeteer')
-
-/**
- * Renders an invoice object to a PDF Buffer using Puppeteer.
- * @param {object} invoice - Full invoice object including items, client_name, etc.
- * @returns {Promise<Buffer>} PDF bytes
- */
-async function renderInvoicePdf(invoice) {
-  const html = buildHtml(invoice)
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-    ],
-  })
-
-  try {
-    const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0' })
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' },
-    })
-    return pdf
-  } finally {
-    await browser.close()
-  }
-}
+const PDFDocument = require('pdfkit')
 
 function fmt(amount) {
-  const n = parseFloat(amount || 0)
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function fmtDate(dateStr) {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
+  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+async function renderInvoicePdf(invoice) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 72 })
+    const chunks = []
+    doc.on('data', chunk => chunks.push(chunk))
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('error', reject)
+
+    const W = doc.page.width - 144 // usable width (margins both sides)
+    const gray = '#6b7280'
+    const dark = '#111827'
+    const light = '#9ca3af'
+    const blue = '#2563eb'
+
+    // ── Header ──────────────────────────────────────────────
+    doc.fontSize(20).font('Helvetica-Bold').fillColor(dark).text('Project Alpha', 72, 72)
+    doc.fontSize(10).font('Helvetica').fillColor(light).text('deliverai.id', 72, 97)
+
+    // Invoice number + status (right-aligned)
+    const numStr = invoice.invoice_number || ''
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(dark)
+    doc.text(numStr, 72, 72, { align: 'right', width: W })
+
+    const statusLabel = (invoice.status || 'draft').toUpperCase()
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(blue)
+    doc.text(statusLabel, 72, 97, { align: 'right', width: W })
+
+    doc.moveTo(72, 120).lineTo(72 + W, 120).strokeColor('#e5e7eb').lineWidth(1).stroke()
+
+    // ── Bill To + Project ───────────────────────────────────
+    let y = 136
+    doc.fontSize(8).font('Helvetica-Bold').fillColor(light).text('BILL TO', 72, y)
+    doc.fontSize(8).font('Helvetica-Bold').fillColor(light).text('PROJECT', 72 + W / 2, y)
+
+    y += 16
+    doc.fontSize(13).font('Helvetica-Bold').fillColor(dark).text(invoice.client_name || '—', 72, y)
+    doc.fontSize(13).font('Helvetica-Bold').fillColor(dark).text(invoice.project_name || '—', 72 + W / 2, y)
+
+    y += 18
+    if (invoice.client_company) {
+      doc.fontSize(10).font('Helvetica').fillColor(gray).text(invoice.client_company, 72, y)
+      y += 14
+    }
+    if (invoice.client_email) {
+      doc.fontSize(10).font('Helvetica').fillColor(gray).text(invoice.client_email, 72, y)
+      y += 14
+    }
+
+    // ── Dates ───────────────────────────────────────────────
+    y += 24
+    doc.fontSize(8).font('Helvetica-Bold').fillColor(light).text('ISSUED', 72, y)
+    doc.fontSize(8).font('Helvetica-Bold').fillColor(light).text('DUE', 72 + 130, y)
+    if (invoice.paid_at) {
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(light).text('PAID', 72 + 260, y)
+    }
+
+    y += 14
+    doc.fontSize(11).font('Helvetica').fillColor(dark).text(fmtDate(invoice.created_at), 72, y)
+    doc.fontSize(11).font('Helvetica').fillColor(dark).text(fmtDate(invoice.due_at), 72 + 130, y)
+    if (invoice.paid_at) {
+      doc.fontSize(11).font('Helvetica').fillColor('#16a34a').text(fmtDate(invoice.paid_at), 72 + 260, y)
+    }
+
+    // ── Line items table ────────────────────────────────────
+    y += 40
+    doc.moveTo(72, y).lineTo(72 + W, y).strokeColor('#e5e7eb').lineWidth(1).stroke()
+    y += 10
+
+    doc.fontSize(8).font('Helvetica-Bold').fillColor(light)
+    doc.text('DESCRIPTION', 72, y)
+    doc.text('AMOUNT', 72, y, { align: 'right', width: W })
+
+    y += 20
+    doc.moveTo(72, y).lineTo(72 + W, y).strokeColor('#e5e7eb').lineWidth(1).stroke()
+
+    const items = invoice.items || []
+    items.forEach(item => {
+      y += 14
+      doc.fontSize(11).font('Helvetica').fillColor(dark).text(item.description || '', 72, y, { width: W * 0.7 })
+      doc.fontSize(11).font('Helvetica').fillColor(dark).text(fmt(item.amount), 72, y, { align: 'right', width: W })
+      y += 16
+      doc.moveTo(72, y).lineTo(72 + W, y).strokeColor('#f3f4f6').lineWidth(0.5).stroke()
+    })
+
+    // ── Total ───────────────────────────────────────────────
+    y += 20
+    const totalX = 72 + W * 0.55
+    const totalW = W * 0.45
+
+    doc.moveTo(totalX, y).lineTo(72 + W, y).strokeColor('#e5e7eb').lineWidth(1).stroke()
+    y += 12
+
+    doc.fontSize(10).font('Helvetica').fillColor(gray).text('Subtotal', totalX, y, { width: totalW * 0.6 })
+    doc.fontSize(10).font('Helvetica').fillColor(gray).text(fmt(invoice.subtotal), totalX, y, { align: 'right', width: totalW })
+
+    y += 18
+    doc.moveTo(totalX, y).lineTo(72 + W, y).strokeColor('#e5e7eb').lineWidth(1).stroke()
+    y += 12
+
+    doc.fontSize(14).font('Helvetica-Bold').fillColor(dark).text('Total', totalX, y, { width: totalW * 0.6 })
+    doc.fontSize(14).font('Helvetica-Bold').fillColor(dark).text(fmt(invoice.total), totalX, y, { align: 'right', width: totalW })
+
+    // ── PAID stamp ──────────────────────────────────────────
+    if (invoice.status === 'paid') {
+      doc.save()
+      doc.rotate(-15, { origin: [72 + W * 0.25, y - 10] })
+      doc.rect(72 + W * 0.05, y - 30, 120, 36).strokeColor('#16a34a').lineWidth(3).stroke()
+      doc.fontSize(20).font('Helvetica-Bold').fillColor('#16a34a').opacity(0.7)
+      doc.text('PAID', 72 + W * 0.05, y - 22, { width: 120, align: 'center' })
+      doc.restore()
+    }
+
+    // ── Footer ──────────────────────────────────────────────
+    const footerY = doc.page.height - 72
+    doc.moveTo(72, footerY - 16).lineTo(72 + W, footerY - 16).strokeColor('#e5e7eb').lineWidth(1).stroke()
+    doc.fontSize(10).font('Helvetica').fillColor(light).opacity(1).text('Thank you for your business.', 72, footerY)
+
+    doc.end()
   })
-}
-
-function statusBadge(status) {
-  const map = {
-    draft:   { bg: '#f3f4f6', color: '#374151', label: 'Draft' },
-    sent:    { bg: '#dbeafe', color: '#1d4ed8', label: 'Sent' },
-    paid:    { bg: '#dcfce7', color: '#15803d', label: 'Paid' },
-    overdue: { bg: '#fee2e2', color: '#dc2626', label: 'Overdue' },
-    void:    { bg: '#f3f4f6', color: '#9ca3af', label: 'Void' },
-  }
-  const s = map[status] || map.draft
-  return `<span style="background:${s.bg};color:${s.color};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase">${s.label}</span>`
-}
-
-function buildHtml(inv) {
-  const items = (inv.items || []).map(item => `
-    <tr>
-      <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;color:#374151;font-size:14px">${item.description || ''}</td>
-      <td style="padding:12px 0;border-bottom:1px solid #f3f4f6;text-align:right;color:#374151;font-size:14px;font-weight:500">${fmt(item.amount)}</td>
-    </tr>
-  `).join('')
-
-  const issuedDate = fmtDate(inv.created_at)
-  const dueDate = fmtDate(inv.due_at)
-  const paidDate = inv.paid_at ? fmtDate(inv.paid_at) : null
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Invoice ${inv.invoice_number}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    color: #111827;
-    background: #fff;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-  .page {
-    width: 794px;
-    min-height: 1123px;
-    padding: 64px 72px;
-    display: flex;
-    flex-direction: column;
-  }
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 56px;
-  }
-  .brand {
-    font-size: 22px;
-    font-weight: 700;
-    color: #111827;
-    letter-spacing: -0.5px;
-  }
-  .brand-sub {
-    font-size: 12px;
-    color: #9ca3af;
-    margin-top: 3px;
-  }
-  .inv-meta {
-    text-align: right;
-  }
-  .inv-number {
-    font-size: 18px;
-    font-weight: 700;
-    color: #111827;
-    letter-spacing: -0.3px;
-  }
-  .inv-status {
-    margin-top: 6px;
-  }
-  .section-label {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #9ca3af;
-    margin-bottom: 6px;
-  }
-  .info-grid {
-    display: flex;
-    gap: 64px;
-    margin-bottom: 48px;
-  }
-  .info-block {
-    flex: 1;
-  }
-  .info-value {
-    font-size: 15px;
-    font-weight: 600;
-    color: #111827;
-    margin-bottom: 2px;
-  }
-  .info-sub {
-    font-size: 13px;
-    color: #6b7280;
-  }
-  .dates-grid {
-    display: flex;
-    gap: 48px;
-    margin-bottom: 48px;
-  }
-  .date-block {}
-  .date-label {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #9ca3af;
-    margin-bottom: 4px;
-  }
-  .date-value {
-    font-size: 14px;
-    color: #374151;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  thead th {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #9ca3af;
-    padding: 0 0 12px;
-    border-bottom: 2px solid #e5e7eb;
-    text-align: left;
-  }
-  thead th:last-child { text-align: right; }
-  .total-row {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 24px;
-  }
-  .total-box {
-    min-width: 240px;
-  }
-  .total-line {
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 0;
-    font-size: 14px;
-    color: #6b7280;
-    border-bottom: 1px solid #f3f4f6;
-  }
-  .total-final {
-    display: flex;
-    justify-content: space-between;
-    padding: 12px 0 0;
-    font-size: 17px;
-    font-weight: 700;
-    color: #111827;
-  }
-  .footer {
-    margin-top: auto;
-    padding-top: 48px;
-    border-top: 1px solid #f3f4f6;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .footer-note {
-    font-size: 12px;
-    color: #9ca3af;
-  }
-  .paid-stamp {
-    transform: rotate(-12deg);
-    border: 3px solid #16a34a;
-    color: #16a34a;
-    font-size: 20px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    padding: 6px 18px;
-    border-radius: 6px;
-    opacity: 0.7;
-    text-transform: uppercase;
-  }
-</style>
-</head>
-<body>
-<div class="page">
-
-  <!-- Header -->
-  <div class="header">
-    <div>
-      <div class="brand">Project Alpha</div>
-      <div class="brand-sub">deliverai.id</div>
-    </div>
-    <div class="inv-meta">
-      <div class="inv-number">${inv.invoice_number}</div>
-      <div class="inv-status">${statusBadge(inv.status)}</div>
-    </div>
-  </div>
-
-  <!-- Bill To + Project -->
-  <div class="info-grid">
-    <div class="info-block">
-      <div class="section-label">Bill To</div>
-      <div class="info-value">${inv.client_name || '—'}</div>
-      ${inv.client_company ? `<div class="info-sub">${inv.client_company}</div>` : ''}
-      ${inv.client_email ? `<div class="info-sub">${inv.client_email}</div>` : ''}
-    </div>
-    <div class="info-block">
-      <div class="section-label">Project</div>
-      <div class="info-value">${inv.project_name || '—'}</div>
-    </div>
-  </div>
-
-  <!-- Dates -->
-  <div class="dates-grid">
-    <div class="date-block">
-      <div class="date-label">Issued</div>
-      <div class="date-value">${issuedDate}</div>
-    </div>
-    <div class="date-block">
-      <div class="date-label">Due</div>
-      <div class="date-value">${dueDate}</div>
-    </div>
-    ${paidDate ? `
-    <div class="date-block">
-      <div class="date-label">Paid</div>
-      <div class="date-value" style="color:#16a34a;font-weight:600">${paidDate}</div>
-    </div>` : ''}
-  </div>
-
-  <!-- Line Items -->
-  <table>
-    <thead>
-      <tr>
-        <th>Description</th>
-        <th>Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${items}
-    </tbody>
-  </table>
-
-  <!-- Total -->
-  <div class="total-row">
-    <div class="total-box">
-      <div class="total-line">
-        <span>Subtotal</span>
-        <span>${fmt(inv.subtotal)}</span>
-      </div>
-      <div class="total-final">
-        <span>Total</span>
-        <span>${fmt(inv.total)}</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Footer -->
-  <div class="footer">
-    <div class="footer-note">Thank you for your business.</div>
-    ${inv.status === 'paid' ? '<div class="paid-stamp">Paid</div>' : ''}
-  </div>
-
-</div>
-</body>
-</html>`
 }
 
 module.exports = { renderInvoicePdf }
